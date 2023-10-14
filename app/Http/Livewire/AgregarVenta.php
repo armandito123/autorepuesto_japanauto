@@ -1,0 +1,559 @@
+<?php
+
+namespace App\Http\Livewire;
+
+use App\Models\Repuesto;
+use App\Models\RepuestoAlmacen;
+use App\Models\Cliente;
+use App\Models\DetalleNotaVenta;
+use App\Models\Venta;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+class AgregarVenta extends Component
+{
+    use WithPagination;
+    protected $paginationTheme = 'bootstrap';
+
+    public $idCliente = null;
+    public $idRepuesto = 0;
+    public $idAlmacen = null;
+    public $arrayRepuestos = [];
+    public $index;
+    public $idUser;
+    public $messageErrorCliente;
+    public $messageErrorStock;
+    public $messageErrorCodigo;
+
+    public $cantidadModal;
+    public $precioModal;
+    public $estadoCantidadPrecioModal = false;
+
+    public $cantidadSelect;
+    public $precioSelect;
+
+    public $cantidad;
+    public $precio = null;
+    public $message;
+    public $total = 0;
+    public $subTotal = 0;
+
+    public $stockActual = false;
+
+    public $stock = 0;
+    public $estado = "";
+
+
+    public $criterio = 'repuestos';
+
+    public $searchTextRepuestoModal = "";
+    public $criterioModal = '';
+
+    public $vP = false;
+    public $searchTextRepuesto;
+    public $searchTextCliente;
+    public $mensajeAlmacen = 'Seleccione un Almacen';
+    public $final = false;
+    public $searchCodigo;
+
+    public function render()
+    {
+        $searchTextRepuesto = '%' . $this->searchTextRepuesto . '%';
+        $searchTextCliente = '%' . $this->searchTextCliente . '%';
+        $idAlmacen = $this->idAlmacen;
+        $criterio = $this->criterio;
+
+
+
+
+        $criterioModal = $this->criterioModal;
+        $this->estadosSeleccionados($criterioModal);
+
+        $searchTextRepuestoModal = '%'.$this->searchTextRepuestoModal.'%';
+
+
+
+        $searchCodigo = $this->searchCodigo;
+
+        $objRepuestoCodigo = $this->buscarRepuestoCodigo($searchCodigo, $idAlmacen);
+
+        $repuesto = $this->busquedaImplacable($criterioModal, $searchTextRepuestoModal, $idAlmacen);
+        $objBusquedaRepuesto = $this->criterioBusqueda($searchTextRepuesto, $criterio, $idAlmacen);
+
+        return view('livewire.venta.agregar-venta', [
+            'clientes' => Cliente::where('nombre', 'LIKE', '%' . $searchTextCliente . '%')
+                ->orWhere('apellidos', 'LIKE', '%' . $searchTextCliente . '%')
+                ->paginate(10),
+            'repuestoSearch' => $objRepuestoCodigo,
+            'repuestos' => $repuesto,
+        ]);
+    }
+
+    public function agregarCliente($cliente)
+    {
+        $this->idCliente = $cliente;
+        $this->emitir('success', 'Cliente seleccionado');
+    }
+    public function emitir($tipo, $message)
+    {
+        $data = [$tipo, $message];
+        $this->emit('message', $data);
+    }
+
+    public function estadosSeleccionados($estado)
+    {
+
+        if ($estado != $this->estado) {
+            $this->searchTextRepuestoModal = "";
+            $this->estadoCantidadPrecioModal = false;
+        }
+        $this->estado = $estado;
+    }
+    public function busquedaImplacable($criterio, $searchText, $idAlmacen)
+    {
+
+        $repuesto = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+            ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+            ->where('idAlmacen', '=', $idAlmacen)
+
+            ->paginate(10);
+
+        if ($criterio == 'repuestos') {
+            $repuesto = RepuestoAlmacen::
+                join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                ->where('repuestos.descripcion', 'like', '%' . $searchText . '%')
+                ->where('idAlmacen', '=', $idAlmacen)
+                ->paginate(10);
+        }
+        if ($criterio == 'categorias') {
+            $repuesto = RepuestoAlmacen::
+                join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                ->join('categorias', 'categorias.id', '=', 'repuestos.idCategoria')
+                ->where('categorias.nombre', 'like', '%' . $searchText . '%')
+                ->where('idAlmacen', '=', $idAlmacen)
+                ->paginate(10);
+        }
+        if ($criterio == 'tipo_repuestos') {
+            $repuesto = RepuestoAlmacen::
+                join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                ->join('tipo_Repuestos', 'tipo_Repuestos.id', '=', 'repuestos.idTipoRepuesto')
+                ->where('tipo_repuestos.tipo', 'like', '%' . $searchText . '%')
+                ->where('idAlmacen', '=', $idAlmacen)
+                ->paginate(10);
+        }
+        if ($criterio == 'marcas') {
+            $repuesto = RepuestoAlmacen::
+                join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                ->join('marca_modelos', 'marca_modelos.id', '=', 'repuestos.idMarcaModelo')
+                ->join('marcas', 'marcas.id', '=', 'marca_modelos.idMarca')
+                ->join('modelos', 'modelos.id', '=', 'marca_modelos.idModelo')
+                ->where('idAlmacen', '=', $idAlmacen)
+                ->where('marcas.nombre', 'like', '%' . $searchText . '%')
+                ->paginate(10);
+        }
+
+        return $repuesto;
+
+    }
+
+    public function criterioBusqueda($searchText, $criterio, $idAlamcen)
+    {
+        switch ($criterio) {
+            case 'repuestos':
+                $repuesto = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                    ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                    ->join('categorias', 'categorias.id', '=', 'repuestos.idCategoria')
+                    ->select('categorias.nombre as categoria',
+                        'repuestos.id as idRepuesto',
+                        'repuestos.descripcion',
+                        'repuestos.imagen',
+                        'repuestos.codigo',
+                        'repuestos.precioVenta',
+                        'repuestos.precioCompra',
+                        'almacenes.id as idAlmacen',
+                        'almacenes.sigla',
+                        'repuesto_almacen.id as idRepuestoAlmacen',
+                        'repuesto_almacen.stock'
+                    )
+                    ->where($criterio . '.descripcion', 'LIKE', '%' . $searchText . '%')
+                    ->where('almacenes.id', '=', $idAlamcen)
+                    ->orWhere($criterio . '.codigo', '=', $searchText)
+                    ->orderBy('repuestos.id', 'asc')
+
+                    ->paginate(10);
+                return $repuesto;
+                break;
+
+            case 'categorias':
+                $repuesto = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                    ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                    ->join('categorias', 'categorias.id', '=', 'repuestos.idCategoria')
+
+                    ->select('categorias.nombre as categoria',
+                        'repuestos.id as idRepuesto',
+                        'repuestos.descripcion',
+                        'repuestos.imagen',
+                        'repuestos.codigo',
+                        'repuestos.precioVenta',
+                        'repuestos.precioCompra',
+                        'almacenes.id as idAlmacen',
+                        'almacenes.sigla',
+                        'repuesto_almacen.id as idRepuestoAlmacen',
+                        'repuesto_almacen.stock'
+
+                    )
+                    ->where('almacenes.id', '=', $idAlamcen)
+                    ->where($criterio . '.nombre', 'LIKE', '%' . $searchText . '%')
+                    ->orderBy('repuestos.id', 'asc')
+
+                    ->paginate(10);
+                return $repuesto;
+                break;
+            case 'tipo_repuestos':
+                $repuesto = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                    ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                    ->join('categorias', 'categorias.id', '=', 'repuestos.idCategoria')
+                    ->join('tipo_repuestos', 'tipo_repuestos.id', '=', 'repuestos.idTipoRepuesto')
+                    ->select('categorias.nombre as categoria',
+                        'repuestos.id as idRepuesto',
+                        'repuestos.descripcion',
+                        'repuestos.imagen',
+                        'repuestos.codigo',
+                        'repuestos.precioVenta',
+                        'repuestos.precioCompra',
+                        'almacenes.id as idAlmacen',
+                        'almacenes.sigla',
+                        'repuesto_almacen.id as idRepuestoAlmacen',
+                        'repuesto_almacen.stock',
+                        'tipo_repuestos.tipo as tipo',
+                    )
+                    ->where('almacenes.id', '=', $idAlamcen)
+                    ->where($criterio . '.tipo', 'LIKE', '%' . $searchText . '%')
+                    ->orderBy('repuestos.id', 'asc')
+
+                    ->paginate(10);
+                return $repuesto;
+                break;
+            case 'marcas':
+                $repuesto = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                    ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                    ->join('categorias', 'categorias.id', '=', 'repuestos.idCategoria')
+                    ->join('tipo_repuestos', 'tipo_repuestos.id', '=', 'repuestos.idTipoRepuesto')
+                    ->join('marca_modelos', 'marca_modelos.id', 'repuestos.idMarcaModelo')
+                    ->join('marcas', 'marcas.id', '=', 'marca_modelos.idMarca')
+                    ->select('categorias.nombre as categoria',
+                        'repuestos.id as idRepuesto',
+                        'repuestos.descripcion',
+                        'repuestos.imagen',
+                        'repuestos.codigo',
+                        'repuestos.precioVenta',
+                        'repuestos.precioCompra',
+                        'almacenes.id as idAlmacen',
+                        'almacenes.sigla',
+                        'repuesto_almacen.id as idRepuestoAlmacen',
+                        'repuesto_almacen.stock',
+                        'tipo_repuestos.tipo as tipo',
+                    )
+                    ->where('almacenes.id', '=', $idAlamcen)
+                    ->where($criterio . '.nombre', 'LIKE', '%' . $searchText . '%')
+                    ->orderBy('repuestos.id', 'asc')
+
+                    ->paginate(10);
+                return $repuesto;
+                break;
+            default:
+                $repuesto = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                    ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                    ->join('categorias', 'categorias.id', '=', 'repuestos.idCategoria')
+
+                    ->select('categorias.nombre as categoria',
+                        'repuestos.id as idRepuesto',
+                        'repuestos.descripcion',
+                        'repuestos.imagen',
+                        'repuestos.codigo',
+                        'repuestos.precioVenta',
+                        'repuestos.precioCompra',
+                        'almacenes.id as idAlmacen',
+                        'almacenes.sigla',
+                        'repuesto_almacen.id as idRepuestoAlmacen',
+                        'repuesto_almacen.stock'
+                    )
+                    ->paginate(10);
+                return $repuesto;
+                break;
+        }
+    }
+    public function buscarRepuestoCodigo($searchCodigo, $idAlmacen)
+    {
+        $repuesto = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+            ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+            ->select('almacenes.id as idAlmacen',
+                'almacenes.sigla',
+                'repuestos.id as idRepuesto',
+                'repuestos.descripcion as repuesto',
+                'repuestos.precioVenta',
+                'repuestos.imagen',
+                'repuesto_almacen.id as idRepuestoAlmacen'
+            )
+            ->where('repuesto_almacen.idAlmacen', '=', $idAlmacen)->
+            where('codigo', '=', $searchCodigo)->paginate(3);
+        return $repuesto;
+    }
+    public function agrgadoRepuestoLista()
+    {
+
+        // $cantidad = $this->cantidadModal;
+        // $precio = $this->precioModal;
+
+        $idRepuesto = $this->idRepuesto;
+
+        $repuesto = Repuesto::findOrFail($idRepuesto);
+
+        if ($this->precioModal == 0) {
+            $this->precioModal = $repuesto->precioVenta; //precio
+        }
+        if ($this->cantidadModal == 0) {
+            $this->cantidadModal = 1;//cantidad
+        }
+
+        $subTotal = $this->precioModal * $this->cantidadModal;  //<<<-- caculo del subtotal
+        $this->total = $this->total + $subTotal; //<<<--caculo del total
+         // total = 100 - (100*0.20);
+
+        array_push($this->arrayRepuestos, [
+            "idRepuestos" => $this->idRepuesto,
+            "descripcion" => $repuesto->descripcion,
+            "precioVenta" => $this->precioModal,
+            "cantidad" => $this->cantidadModal,
+            "subTotal" => $subTotal,
+            "idAlmacen" => $this->idAlmacen,
+        ]);
+
+        $this->cantidadModal = null;
+        $this->precioModal = null;
+
+        $this->estadoCantidadPrecioModal = false;
+
+        $this->emitir('success',"Agregado exitosamente");
+
+    }
+    public function existe($idRepuesto)
+    {
+        $c = count($this->arrayRepuestos);
+        $sw = false;
+
+        for ($i = 0; $i < $c; $i++) {
+
+            if ($this->arrayRepuestos[$i]['idRepuestos'] == $idRepuesto) {
+                $sw = true;
+            }
+        }
+        return $sw;
+    }
+    public function validarStock($cantidad, $idRepuesto, $idAlmacen)
+    {
+        if (is_null($cantidad)) {
+            $this->cantidad = 1;
+            $cantidad = $this->cantidad;
+        }
+
+        $repuesto = RepuestoAlmacen::select('stock')
+            ->where('idAlmacen', '=', $idAlmacen)
+            ->where('idRepuesto', '=', $idRepuesto)
+            ->get();
+        $sw = false;
+        $stock = $repuesto[0]->stock;
+        if ($stock >= $cantidad) {
+            $sw = true;
+        }
+        return $sw;
+    }
+
+    public function seleccionarRepuesto()
+    {
+
+        if ($this->searchCodigo) {
+            $searchCodigo = $this->searchCodigo;
+
+            $pieza = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                ->where('repuestos.codigo', '=', $searchCodigo)
+                ->where('almacenes.id', '=', $this->idAlmacen)
+                ->get();
+
+            $c = count($pieza);
+
+            if ($c > 0) {
+                $this->idRepuesto = $pieza[0]->idRepuesto;
+                if (!$this->existe($this->idRepuesto)) {
+                    $repuesto = Repuesto::findOrFail($this->idRepuesto);
+
+                    if (is_null($this->precioSelect)) {
+                        $this->precioSelect = $repuesto->precioCompra;
+                    }
+                    if (is_null($this->cantidadSelect)) {
+                        $this->cantidadSelect = 1;
+                    }
+                    if ($this->validarStock($this->cantidadSelect, $this->idRepuesto, $this->idAlmacen)) {
+
+                        $subTotal = $this->precioSelect * $this->cantidadSelect;
+                        $this->total = $this->total + $subTotal;
+
+                        array_push($this->arrayRepuestos, [
+                            "idRepuestos" => $this->idRepuesto,
+                            "descripcion" => $repuesto->descripcion,
+                            "precioVenta" => $this->precioSelect,
+                            "cantidad" => $this->cantidadSelect,
+                            "subTotal" => $subTotal,
+                            "idAlmacen" => $this->idAlmacen,
+                        ]);
+                        $this->cantidadSelect = null;
+                        $this->precioSelect = null;
+                        $this->emitir('success', "El Agregado correctamente");
+
+                    } else {
+                        $this->emitir('warning', "El Stock es insuficiente");
+                    }
+                } else {
+                    $this->emitir('danger', "El Repuesto ya fue seleccionado");
+                }
+
+            } else {
+                $pieza = RepuestoAlmacen::join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+                    ->join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+                    ->where('repuestos.codigo', '=', $searchCodigo)
+                    ->get();
+
+                $i = count($pieza);
+                if ($i > 0) {
+                    $this->emitir('warning', 'El repuesto no esta disponible en este almacen');
+                } else {
+                    $this->emitir('danger', 'El codigo no es valido');
+                }
+            }
+        } else {
+            $this->emitir('danger', 'Ingrese un codigo por favor');
+        }
+    }
+
+    public function agregarRepuesto($idRepuesto)
+    {
+
+        $this->idRepuesto = $idRepuesto;
+        if (!$this->existe($this->idRepuesto)) {
+            $this->estadoCantidadPrecioModal = true;
+        } else {
+            $this->emitir('danger', 'El repuesto ya fue asignado');
+        }
+    }
+    public function guardarDetalle($usuario)
+    {
+
+        if (!is_null($this->idCliente)) {
+            $fecha = date('Y-m-d');
+
+            $this->idUser = $usuario;
+            $notaVenta = new Venta();
+            $notaVenta->fecha = $fecha;
+            $notaVenta->montoTotal = $this->total;
+            $notaVenta->idCliente = $this->idCliente;
+            $notaVenta->idUser = $usuario;
+            $notaVenta->save();
+
+            $c = count($this->arrayRepuestos);
+
+            for ($i = 0; $i < $c; $i++) {
+
+                $idRepuestoAlmacen = $this->buscarIdRepuestoAlmacen(
+                    $this->arrayRepuestos[$i]['idRepuestos'],
+                    $this->arrayRepuestos[$i]['idAlmacen']
+                )->idRepuestoAlmacen;
+
+                $detalleVenta = new DetalleNotaVenta();
+                $detalleVenta->cantidad = $this->arrayRepuestos[$i]['cantidad'];
+                $detalleVenta->subTotal = $this->arrayRepuestos[$i]['subTotal'];
+                $detalleVenta->idRepuestoAlmacen = $idRepuestoAlmacen;
+                $detalleVenta->idNotaVenta = $notaVenta->id;
+                $detalleVenta->save();
+
+                $repuestoAlmacen = RepuestoAlmacen::findOrFail($idRepuestoAlmacen);
+                $stock = $repuestoAlmacen->stock;
+                $repuestoAlmacen->stock = $stock - $this->arrayRepuestos[$i]['cantidad'];
+                $repuestoAlmacen->update();
+
+            }
+            $this->final = true;
+        } else {
+            $this->messageErrorCliente = 'El cliente no se ha seleccionado';
+        }
+    }
+
+    public function buscarIdRepuestoAlmacen($idRepuesto, $idAlmacen)
+    {
+        $idRepuestoAlmacen =
+        RepuestoAlmacen::select('repuesto_almacen.id as idRepuestoAlmacen')->
+            join('repuestos', 'repuestos.id', '=', 'repuesto_almacen.idRepuesto')
+            ->join('almacenes', 'almacenes.id', '=', 'repuesto_almacen.idAlmacen')
+            ->where('idAlmacen', '=', $idAlmacen)
+            ->where('idRepuesto', '=', $idRepuesto)
+            ->get();
+        return $idRepuestoAlmacen[0];
+    }
+
+    public function actualizarPrecioStock($i)
+    {
+
+
+        $this->total = $this->total - $this->arrayRepuestos[$i]["subTotal"];
+
+        if (!is_null($this->precio)) {
+
+            $this->arrayRepuestos[$i]['precioVenta'] = $this->precio;
+            $this->emitir('success','Precio actualizado correctamente');
+
+        }
+
+        if (!is_null($this->cantidad)) {
+            if ($this->validarStock($this->cantidad, $this->arrayRepuestos[$i]['idRepuestos'], $this->arrayRepuestos[$i]['idAlmacen'])) {
+                $cantidad = ($this->cantidad);
+                $this->arrayRepuestos[$i]['cantidad'] = $cantidad;
+                $this->cantidad = $cantidad;
+                $this->emitir('success','Cantidad actualizada correctamente');
+
+            } else {
+                $this->messageErrorStock = "Stock insuficiente";
+                $this->emitir('danger','Stock insuficiente');
+
+            }
+        }
+
+        $this->arrayRepuestos[$i]["subTotal"] = ($this->arrayRepuestos[$i]["precioVenta"]) * $this->arrayRepuestos[$i]["cantidad"];
+        $this->total = $this->total + $this->arrayRepuestos[$i]["subTotal"];
+
+        $this->cantidad = null;
+        $this->precio = null;
+
+    }
+    public function eliminarRepuesto($index)
+    {
+        $this->total = $this->total - $this->arrayRepuestos[$index]['subTotal'];
+        array_splice($this->arrayRepuestos, $index, 1);
+        $this->emitir('danger','Eliminado correctamente');
+    }
+
+    public function verProducto($idRepuesto)
+    {
+        $this->vP = true;
+        $this->idRepuesto = $idRepuesto;
+    }
+
+    public function verTablaProducto()
+    {
+        $this->vP = false;
+
+    }
+}
